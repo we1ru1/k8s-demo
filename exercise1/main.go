@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -42,7 +44,23 @@ func main() {
 	}
 
 	for _, d := range list.Items {
-		fmt.Printf("* Pod name: %s\n", d.Name)
+		fmt.Printf("* Pod name: %s, status: %s\n", d.Name, d.Status.Phase)
 	}
 
+	// prompt()
+
+	// 删除指定名称的Pod.
+
+}
+
+func prompt() {
+	fmt.Printf("-> Press Return key to continue.")
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		break
+	}
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+	fmt.Println()
 }

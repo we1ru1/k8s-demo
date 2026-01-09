@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  labels:
+    app: nginx-demo
+spec:
+  replicas: 3  # 设置为3，方便验证 client-go 的 List 功能
+  selector:
+    matchLabels:
+      app: nginx-demo
+  template:
+    metadata:
+      labels:
+        app: nginx-demo
+    spec:
+      containers:
+      - name: nginx
+        image: m.daocloud.io/docker.io/library/nginx:1.28  # 使用稳定版本
+        ports:
+        - containerPort: 80
+        resources: # 加一点资源限制，看着更像生产配置
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

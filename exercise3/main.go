@@ -4,14 +4,86 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"runtime"
 
+	// 用于 wait.Until 和 ResyncPeriod。
 	corev1 "k8s.io/api/core/v1"
+	// 提供一个全局的 panic/error 处理器，防止 worker 中的错误搞垮整个程序。
+	// 提供 Until 函数，可以优雅地启动一个循环运行的 worker。
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+	"k8s.io/client-go/util/workqueue" // 这次练习的主角——工作队列。
 )
+
+// 1. 定义 Controller 结构体
+// 包含了控制器需要的所有组件（客户端、Lister、Informer同步状态、工作队列）
+type Controller struct {
+	clientset kubernetes.Interface
+	podLister v1.PodLister
+	podSynced cache.InformerSynced
+	queue     workqueue.TypedRateLimitingInterface[string] // key是string类型
+}
+
+// Controller的构造函数（核心：生产者逻辑）。作用：
+//  1. 使用构造函数来封装 Controller 的初始化逻辑，使 main 函数更整洁；
+//  2. 负责创建和设置 Controller 的所有内部组件；
+func NewController(clientset kubernetes.Interface, podInformer cache.SharedIndexInformer) *Controller {
+	// 使用 `NewTypedRateLimitingQueue` 来创建一个类型安全的队列实例，替代了旧的 `NewRateLimitingQueue`。
+	// 队列现在明确知道它处理的是 `string` 类型的数据。
+	queue := workque.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string](workqueue.DefaultTypedControllerRateLimiter[string]()))
+
+	c := &Controller{
+		clientset: clientset,
+		// 从 Informer 中获取 Lister。Lister 提供了从本地缓存（而不是API Server）高效读取资源的能力。
+		podLister: v1.NewPodLister(podInformer.GetIndexer()),
+		// Informer 的缓存同步状态函数，后续会用它来确保在处理任何业务逻辑前，本地缓存已经与API Server同步。
+		podSynced: podInformer.HasSynced,
+		queue:     queue,
+	}
+
+	// Producer 逻辑
+	// 在这里注册事件回调函数，但它们现在只做一件事：将变更对象的 key (格式通常是 "namespace/name") 放入工作队列。
+	// 这个过程必须非常迅速，不能执行任何耗时操作，从而将“事件发现”与“事件处理”彻底解耦。
+	podInformer.AddEventHandler(cache.ResourceEventHandlerDetailedFuncs{
+		AddFunc: func(obj interface{}) {
+			// `cache.MetaNamespaceKeyFunc`
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err != nil {
+				runtime.HandleError(err)
+				return
+			}
+			fmt.Printf("Event -> Add Pod: %s\n", key)
+			// 将 key 添加到 workqueue
+			c.queue.Add(key)
+		},
+		UpdateFunc: func(oldObj, func(oldObj, newObj interface{})) {
+			key, err := cache.MetaNamespaceKeyFunc(newObj)
+			if err != nil {
+				runtime.HandleError(err)
+				return
+			}
+			fmt.Printf("Event -> Update Pod: %s\n", key)
+			c.queue.Add(key)
+		},
+		// `cache.DeletionHandlingMetaNamespaceKeyFunc` 是专门为删除事件设计的 key 提取函数。
+		// 因为删除事件可能传递的是一个 `DeletedFinalStateUnknown` 对象（当Informer在watch中断后重新同步时），这个函数能正确处理这种情况
+		DeleteFunc: func(obj interface{}) {
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err != nil {
+				runtime.HandleError(err)
+				return
+			}
+			fmt.Printf("Event -> Delete Pod: %s\n", key)
+			c.queue.Add(key)
+		},
+	})
+
+	return c
+}
 
 func main() {
 	var kubeconfig *string

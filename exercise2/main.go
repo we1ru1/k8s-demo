@@ -135,7 +135,8 @@ func main() {
 
 	// 启动 factory，它会启动所有通过它创建的 informer
 	// 这必须在 goroutine 中运行，因为它会一直阻塞直到 stopCh 关闭
-	go factory.Start(stopCh)
+	// go factory.Start(stopCh)
+	factory.Start(stopCh)
 
 	// 等待缓存同步至关重要的
 	// 在 informer 第一次将 apiserver 的全量资源加载到本地缓存之前，下面的调用会一直阻塞

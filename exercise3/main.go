@@ -144,6 +144,10 @@ func (c *Controller) processNextWorkItem() bool {
 		// 此时应该退出 worker 循环，所以返回false
 		return false
 	}
+
+	// 在此处调用Done，以便workqueue知道我们已经完成了对此项的处理。同时，如果
+	// 不想让这个work item作重新入队，必须记得调用Forget。例如，当发生暂时性错误时，
+	// 不会调用Forget，而是将该项重新放回workqueue，并在退避期后再次尝试。
 	defer c.queue.Done(key)
 
 	// 真正的业务逻辑，包含在syncPod()中

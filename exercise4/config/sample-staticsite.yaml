@@ -1,0 +1,9 @@
+apiVersion: demo.k8s.io/v1alpha1  # 对应着 crd YAML 中的 group + version
+kind: StaticSite
+metadata:
+  name: my-site
+  namespace: default
+spec:
+  image: docker.io/library/nginx:1.27
+  imagePullPolicy: IfNotPresent
+  replicas: 2

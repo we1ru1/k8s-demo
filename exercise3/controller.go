@@ -30,7 +30,7 @@ type Controller struct {
 func NewController(clientset kubernetes.Interface, podInformer cache.SharedIndexInformer) *Controller {
 	// 使用 NewTypedRateLimitingQueue 来创建一个类型安全的队列实例，替代了旧的 NewRateLimitingQueue。
 	// 队列现在明确知道它处理的是 `string` 类型的数据。
-	queue := workqueue.NewTypedRateLimitingQueue[string](workqueue.DefaultTypedControllerRateLimiter[string]())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 
 	c := &Controller{
 		clientset: clientset,
